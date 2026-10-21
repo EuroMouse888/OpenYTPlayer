@@ -1,0 +1,12 @@
+yt-dlp>=2024.1.1
+ytmusicapi>=1.10.0
+pygame>=2.5.0
+Pillow>=10.0.0
+requests>=2.31.0
+imageio>=2.33.0
+imageio-ffmpeg>=0.4.9
+sounddevice>=0.4.6
+numpy>=1.26.0
+selenium>=4.6.0
+# Optional: install VLC (https://www.videolan.org/vlc/) to use it as an extra backend
+# python-vlc>=3.0.20

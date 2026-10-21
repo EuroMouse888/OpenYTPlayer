@@ -1,0 +1,912 @@
+OpenYTPlayer — Complete project documentation (doc.txt)
+==============================================================
+Date: 2026-10-20. Purpose: anyone can understand 100% of the project
+without reading all the code. English throughout.
+
+Author: eUROmOUSE888 · License: MIT (see LICENSE) — the most open and
+permissive license in common use: use, study, modify, redistribute, sell
+and even close the source, keeping only the credit line.
+
+1. WHAT IT IS
+-------------
+Desktop player for YouTube / YouTube Music in Python + Tkinter.
+- Searches songs, plays streaming audio (~3 s) with fallback to download.
+- Links to your Google account via cookiesYT.json, permanent OAuth, or
+  browser session (Chrome/Edge/Brave...). Without account it works as guest
+  (search + public URLs).
+- Ultra-customizable: background color/gradient/image/VIDEO, PNG-shaped
+  buttons, image icons, transparency, frameless custom title bar, floating
+  stickers, movable/resizable video panel, draggable sidebar order,
+  persistent volume, progressive lists.
+- No visible console window (hidden on Windows).
+- NO local song storage: no local favorites, no local lists. Favorites =
+  YouTube Music "Liked songs" (rate_song API); playlists = YouTube Music
+  playlists only.
+
+2. LAUNCH
+---------
+- `python start.py`          -> opens the player (hides console unless
+  --consola). This is the canonical entry point.
+- `python Iniciar.py`        -> legacy alias, does exactly the same
+  (kept so old shortcuts keep working).
+- `pythonw start.pyw` / `pythonw Iniciar.pyw` (or double-click them)
+  -> no console at all.
+- `python start.py --selftest` -> 8 automatic checks (deps, cookies,
+  theme, client, ffmpeg stream, audio engine, OAuth/session, UI import).
+  It NEVER signs in: the client is built with `use_account=False` (guest),
+  which skips OAuth, the browser session and the cookie file, so test
+  queries cannot end up in the real account's YouTube Music history.
+- `python start.py --selftest --offline` -> same checks with no network
+  calls (skips the search and the ffmpeg stream check).
+- `python start.py --reset` -> resets config/theme.json to defaults.
+- `python start.py --consola` / `--show-console` -> force showing console.
+- `PrerequisitesInstalation.bat` (double-click on a fresh Windows) installs
+  Python (winget fallback), upgrades pip, installs requirements.txt and
+  verifies imports.
+
+Flow: Iniciar.py main() -> ensure_dirs -> crash log -> console hide/relay
+to pythonw (no window ever shows) -> ThemeManager -> YouTubeClient ->
+PlayerEngine -> MainWindow.run(). Fatal errors go to cache/crash.log;
+stdout goes to cache/stdout.log when console hidden.
+
+3. FILE STRUCTURE
+-----------------
+start.py              canonical entry point (deps, selftest, main)
+start.pyw             console-less launcher for Windows
+Iniciar.py            legacy alias of start.py (same behaviour)
+Iniciar.pyw           console-less legacy launcher
+requirements.txt      yt-dlp, ytmusicapi 1.12.3, pygame, Pillow, requests,
+                      imageio, imageio-ffmpeg, sounddevice, numpy, selenium
+PrerequisitesInstalation.bat   fresh-Windows installer (double-click)
+app/__init__.py       (empty)
+app/config.py         ThemeManager + DEFAULT_THEME + themes/<name>/ packages
+app/youtube_client.py YouTubeClient: ytmusicapi + yt-dlp streams
+app/player_engine.py  PlayerEngine: queue/loop/shuffle + audio
+app/stream_player.py  StreamPlayer: ffmpeg -> PCM -> sounddevice
+app/browser_cookies.py browser-cookie extraction via yt-dlp
+app/cookies_util.py   Netscape cookie file + OAuth file helpers
+app/google_login.py   direct Google login: real browser, persistent profile
+app/lastfm_client.py  Last.fm scrobbling + your own play counts
+app/metadata_edits.py per-song edits (title/artist/album) + play counts
+app/ui_main.py        MainWindow Tkinter (~12 000 lines), fully in English
+app/appicon.py        generates assets/icons/app.ico
+assets/icons/         the app icon (app.ico, app.png, app_64.png)
+config/theme.json     working customization (auto-merged on load)
+config/favoritas.json  (legacy, no longer used)
+config/playlists.json (legacy, no longer used)
+config/oauth.json     permanent OAuth token (do not share)
+config/oauth_client.json {client_id, client_secret}
+config/browser_login/ persistent selenium profiles (do not delete by hand)
+cache/                audio, cookies.txt, browser.json, crash.log,
+                      stdout.log, glogin.log
+cookiesYT.json        (root, optional) exported YouTube cookies; auto-reloaded
+                      on change
+themes/               theme packages: themes/<name>/theme.json + assets/
+themes/DefaultTheme/  built-in minimalist dark theme
+themes/theme1/        extra theme package shipped with the project
+tests/                real GUI checks (gui_check.py, gui_size.py)
+doc.txt               this file
+README.md             public documentation for GitHub
+LICENSE               MIT license (© eUROmOUSE888)
+
+Everything under config/ and cache/ is created at runtime and is ignored by
+git: no account, cookie, log, theme or per-song data ever reaches GitHub.
+
+4. DEPENDENCIES AND BACKENDS
+----------------------------
+- yt-dlp: search, stream info, download, browser cookies.
+- ytmusicapi: playlists, liked songs, search, OAuth, radio, related, album,
+  artist, lyrics.
+- pygame.mixer: local fallback audio (MP3). Buffer 512, 44100 Hz.
+- sounddevice + numpy + ffmpeg (imageio-ffmpeg): online streaming without
+  downloading.
+- PIL/Pillow: backgrounds, thumbnails, button shapes, icons, video frames,
+  stickers.
+- imageio: background/video frame reading, GIFs.
+- selenium: direct Google login (auto chromedriver).
+- VLC (optional): detected but not used as main backend (pygame is main).
+
+5. THEME SYSTEM (config/theme.json + themes/<name>/)
+----------------------------------------------------
+ThemeManager.load() merges defaults with the loaded file, so old themes
+auto-migrate (new keys appear without erasing customization).
+get(*keys, default) / set(value,*keys) -> save() / reset() / save().
+
+Every user-visible string is English. Internal schema keys stay in Spanish
+on purpose (renaming them would silently drop existing customization);
+new code uses .get() with defaults.
+
+Theme packages live in themes/<name>/ and contain theme.json (+ assets/).
+Asset paths inside a package are stored RELATIVE (assets/ccc...png) and the
+files are copied into themes/<name>/assets/ on save; at load they are
+resolved back to absolute paths. A package snapshots ABSOLUTELY ALL
+graphical settings:
+
+- ventana: title, size, transparency, always on top, custom title bar,
+  hide console.
+- fondo: mode (color|gradient|image|video), colors, gradient direction,
+  image/video paths, overlay opacity.
+- botones: size, shape (round|square|custom PNG), custom PNG path, colors,
+  border, radius, spacing.
+- iconos: 16 keys (play, pause, prev, next, shuffle x2, loop x3, fav x2,
+  volume, search, settings, customize, playlist, close) + icon font size;
+  each is a text glyph or an image path. The DEFAULT set is deliberately
+  MONOCHROME (▶ ▌▌ ◀◀ ▶▶ ⇄ ↻ ↻1 ♡ ♥ ♪ ⌕ ⚙ ◐ ☰ ✕), never a colour emoji.
+- texto: font family, custom .ttf/.otf path, sizes, 4 colors.
+- lista: colors, hover/active, thumbnails on/off, thumbnail size,
+  background transparency vs. the wallpaper, progressive batch size.
+- fondos_secciones: per section (Search, Playlists, Liked, Queue):
+  inherit | color | image | video.
+- fondos_botones: per sidebar button (inherit | color | image).
+- fondos_paneles: per panel (top bar, sidebar, playlist list, player,
+  progress, volume).
+- video_panel: visible, dx/dy (relative to main window, may be outside),
+  w, h, fps (1-30).
+- sidebar_orden: ordered section keys.
+- stickers: [{path, dx, dy, w, h}] — floating images following the window.
+- reproductor: default volume, default loop, default shuffle, autoplay,
+  audio quality, cache MB, notifications, save volume.
+- cuenta: cookies JSON path, use cookies, session source (file|browser),
+  browser.
+
+DEFAULT PALETTE (boring on purpose)
+The shipped theme is 100% neutral grey: every colour of every element has
+R = G = B (no hue, no saturation), so nothing shouts. Palette:
+
+  #101010 / #141414  deepest shadow, transparency trick
+  #1a1a1a            list background
+  #1c1c1c            top bar, volume panel
+  #1e1e1e            panels, entries, sliders
+  #1f1f1f            sidebar
+  #212121            playlist box
+  #232323            gradient end
+  #242424            context menus
+  #262626            row hover
+  #2a2a2a            sidebar buttons
+  #2b2b2b            button faces, slider track
+  #333333            row active / selected
+  #383838 / #3d3d3d  borders (panels, entries, sliders)
+  #4a4a4a            selection, drag highlight
+  #8c8c8c            slider thumb
+  #9d9d9d            subtitles
+  #b0b0b0            accent
+  #cccccc            list text
+  #e0e0e0 / #e8e8e8  button text, entry text
+  #f0f0f0            titles
+  #ffffff            pure white (max contrast text only)
+
+The icons are text glyphs (not emoji) so the interface never shows a
+coloured pictogram either. The only hue left is the muted brick #7f3b36 of
+the "close" button on hover, which has to stay readable as a warning.
+
+Built-in packages:
+- theme1: snapshot of the user's current look at first run (all current
+  resources copied into themes/theme1/assets/). Active by default.
+- DefaultTheme: built-in minimalist dark theme (flat greys, no assets).
+
+Customize window -> "Themes" tab: list of themes, apply selected, save
+current look as a new package, delete a theme (DefaultTheme needs
+confirmation). The active theme persists in config/active_theme.txt and is
+restored on startup (Iniciar.py calls ThemeManager.ensure_builtin_themes()
+first thing).
+
+6. YOUTUBE CLIENT (app/youtube_client.py)
+-----------------------------------------
+YouTubeClient(cookies_json_path, cache_dir, use_cookies,
+              session_source, browser)
+Attributes: cookies, cookie_header, netscape_path, auth_path, oauth_path,
+oauth_creds_path, ytmusic, authenticated, auth_method (oauth|cookies|none),
+account_label, last_error, stream/video caches, lock.
+
+PLAYER_CLIENTS = ["android","web","mweb"] to avoid "reload page".
+Session: _load_cookies / reload_cookies / import_login_cookies /
+_read_navegador / _apply_navegador_cookies / _maybe_heal_session
+(re-reads browser every 120 s when source=browser) / _auth_call.
+OAuth: _load_oauth_creds / save_oauth_creds / get_oauth_creds_saved /
+oauth_linked / disconnect_oauth / finish_oauth_device (device flow).
+_init_ytmusic: 0) OAuth if oauth.json+creds and get_account_info OK;
+1) browser.json if account info OK else "Session expired";
+2) YTMusic() guest.
+
+Library: get_library_playlists(limit) -> [{id,title,count,thumbnails,source}];
+get_liked_songs(limit) -> [norm]; get_playlist_tracks(pid,limit)
+(ytmusicapi + yt-dlp flat fallback); fetch_progressive(kind, identifier,
+limits, on_batch, should_stop): kind=liked|playlist|library; increasing
+limits (100,300,800,2000,5000); on_batch(batch, is_final) per step; stops
+when the list stops growing. Runs in a thread, never blocks UI.
+
+Writing (need authenticated session): add_to_playlist(pid, video_ids);
+create_playlist(title, video_ids, description, private) -> pid;
+like_song(video_id, like) via rate_song(LIKE/INDIFFERENT);
+dislike_song(video_id, dislike) via rate_song(DISLIKE);
+remove_from_playlist(pid, tracks) (needs setVideoId, own playlists only);
+delete_playlist(pid); rename_playlist(pid, title).
+
+Streams: get_stream_info(vid) (cache 3 h, bestaudio, best abr);
+get_video_info(vid) (cache, mp4 ~360p for panel); download_audio(vid,hook)
+(reuses MP3 cache, converts via ffmpeg).
+
+YT Music menu options (right-click on any song / playlist):
+- get_watch_tracks(video_id, radio=False, limit=25): "Up next"
+- start_radio(video_id, limit=25): YT Music radio (varies every time)
+- get_up_next(video_id, limit=25)
+- get_song_related(video_id, limit=20)
+- get_album_tracks(browse_id) -> (title, tracks); fallback: search by name
+- get_artist_info(artist_id); get_artist_top_tracks(artist_id, limit=20)
+- get_lyrics_text(video_id) -> (lyrics, source) via watch playlist +
+  get_lyrics
+- get_song_details(video_id) -> raw get_song dict
+- _norm_track(t): videoId, title, artist, artistIds, album, albumId,
+  thumbnail, duration, duration_sec, setVideoId, browseId, likeStatus
+
+No radio/startRadio/get_album/get_artist in ytmusicapi 1.12.3? They exist;
+all are implemented above.
+
+Search returns SONGS AND VIDEOS together, with no distinction in the rows
+(every row is the same playable item, thumbnail, duration, context menu).
+THREE sources are queried IN PARALLEL and merged, so a song shelf can never
+hide a video:
+1) YT Music filter="songs",
+2) YT Music filter="videos" (one unfiltered YT Music search buries videos
+   under albums, artists and podcasts),
+3) REAL YouTube via InnerTube WEB search (_search_youtube_web, client WEB
+   then TVHTML5, parses twoColumnSearchResultsRenderer -> videoRenderer).
+   This one is essential: yt-dlp's ytsearch is BLOCKED here (0 entries for
+   every query and every player client) and YT Music only knows its own
+   music catalogue, so a doujin/cover/video outside it (e.g.
+   "touhou maiden de kuwabarakuwabara") used to be unreachable - searching
+   its exact title showed unrelated songs and no video at all.
+Videos are the two video sources alternating (YT Music shelf + real YouTube,
+both represented, deduped by videoId), then rows are merged by
+_merge_search_kinds: a few songs head start (typing a name usually means
+the song), then 1 song : 1 video, leftovers always kept. Total latency
+~1 s (parallel). Last resort: yt-dlp. The section title shows the split
+("Results: X • 17 songs • 13 videos") so the mix is visible at a glance.
+
+Which copy is running: Settings > "RUNNING FROM" prints the absolute folder
+plus the modification time of app/ui_main.py and app/youtube_client.py. The
+user keeps numbered copies under Desktop\CopiasOpenYTPlayer, so a stale
+copy is the classic "my change did nothing" trap.
+
+7. PLAYER ENGINE (app/player_engine.py)
+---------------------------------------
+PlayerEngine(client, volume, loop_mode, shuffle,
+             on_track_change, on_state_change)
+State: stopped|loading|playing|paused. queue:[], index, loop_mode
+(off|all|one), shuffle, volume 0-100, current, duration_sec, stream|pygame
+backends.
+- set_queue(tracks, start=0, autoplay=True): full queue; play from position
+  (uses the complete list, not just visible rows).
+- cycle_loop(): off > all > one > off. set_shuffle(on).
+- play_at(pos): stop + load in thread (_load_and_play):
+  get_stream_info -> StreamPlayer.play(audio_url) -> monitor;
+  fallback download_audio + pygame.mixer; auto-skip next on failure
+  (0.5 s anti-cascade sleep).
+  SKIP SAFETY (no x2 speed, no frozen UI): play_at() never waits for the
+  previous loader (that used to block the UI for up to 2 s per skip). Each
+  call increments a generation number; only the newest generation may open
+  audio, older loaders return before touching the streamer, and the newest
+  loader waits for the previous one inside its own background thread. One
+  stream at a time, no matter how fast the user skips.
+- pause/resume/toggle/next/prev/stop/seek(seconds) (stream seek real;
+  file best-effort). set_volume applies to streamer + pygame.
+- get_position(): streamer pos / pygame get_pos / time since play start;
+  paused returns _paused_pos.
+- _monitor_loop() each 0.5 s -> _on_track_end() (loop one/all).
+Volume persists: slider moves -> player + debounced save to
+reproductor.volumen_defecto; saved on close.
+
+8. MAIN WINDOW (app/ui_main.py)
+-------------------------------
+MainWindow(theme, client, player). Tk root, WM_DELETE -> on_close.
+Build: bg_label + main container (dark bg from first frame, no white flash)
++ custom title bar (title, ✕/▢/─ buttons, native Windows drag via
+PostMessage 0xA1, never SendMessage) + top bar (search, 🔍, 🔗 URL, account,
+🎨 Customize, ⚙ Settings).
+Body: sidebar (190 px, draggable button order: 🔍 Search / 📃 Playlists /
+♥ Liked / ⏳ Queue; + New YT playlist; playlist library box) + list panel
+(scrollable canvas with rows, "Show more" button, infinite scroll only when
+near bottom and real scroll exists).
+Player bar: thumbnail (= play button, ▶ overlay) + song title + progress
+Scale (click anywhere to jump to that time; drag also works) + times +
+controls (prev, play/pause, next, shuffle, loop, liked) + volume
+(−/+ buttons, 0.2-step slider, icon, label).
+Status bar at bottom.
+
+Rows (songs): square thumbnail (cover, no distortion; cache by URL+size),
+title — artist, duration. No inline buttons anymore: SINGLE click anywhere
+on the row (title, thumbnail, duration or background) plays it; dragging
+the row reorders it (even across the recommendations separator); a single
+click on a channel name opens that channel. RIGHT-CLICK opens the full YT Music menu:
+Play / Play next / Add to queue / Start radio / Up next (YT Music) /
+Related songs / Like / Dislike / Save to YT playlist / New YT playlist /
+Remove from this playlist / View album / View artist / View lyrics /
+Song details / Copy YouTube URL / Open in YouTube. Playlists rows: double-
+click or right-click (Open / Playlist radio / Rename / Delete / Copy URL).
+
+FINAL LIST BEHAVIOR (songs, queue, recommendations)
+- ONE CLICK = PLAY. A single click anywhere on a song row (title,
+  thumbnail, duration or background) plays that song immediately. There is
+  no double-click requirement anywhere in the app.
+- ONE CLICK ON A CHANNEL = OPEN THAT CHANNEL. Every artist of a
+  multi-artist song gets its own channel label with its own channelId. If
+  a track has no channelId, the app asks YouTube for the uploader and opens
+  that channel anyway.
+- DRAG = REORDER. Press and move more than 4 px: the dragged row is
+  repainted live in the slot under the pointer and dropped there. ANY song
+  can be dragged from ANY position to ANY position, including across the
+  recommendations separator (playlist songs and recommendations are
+  interchangeable). There are no ▲/▼ buttons: drag is the only reordering
+  method, and it works in playlists, albums, other users' playlists, the
+  queue and the recommendation block.
+- REORDERING IS SESSION-ONLY: it never modifies nor saves any YouTube
+  playlist or album, and nothing is written to disk.
+- PLAYING A SONG loads the WHOLE visible list (playlist + recommendations)
+  into the queue and jumps to the Queue section, so the user can reorder
+  the exact queue that is playing.
+- THE QUEUE ALWAYS SHOWS WHAT IS PLAYING: current_list_full and
+  player.queue are the same order. Entering or leaving the queue never
+  duplicates the recommendations (the old behaviour appended them twice).
+- LOOP OFF + playlist/album: a separator bar appears after the playlist
+  songs and the recommendations are painted underneath. When the playlist
+  ends, playback continues with the FIRST recommendation, then with the
+  next one, in the visual order. Every recommendation that starts playing
+  moves ABOVE the separator, so the played ones pile up above it and the
+  pending ones stay below.
+- With shuffle OFF, the song right after the playlist is always the first
+  recommendation.
+- Dragging never loses the songs that are not rendered yet ("Show more"
+  not clicked): they are kept at the end of the list.
+- Turning loop ON removes the separator AND the recommendations from the
+  session list and from the queue.
+
+Favorites = YT Music "Liked songs" (progressive load, cache _liked_ids to
+paint ♥/♡ without network per row). Sign-in required to Like.
+
+Video panel (Toplevel, transient of main window, NO -topmost: stays above
+the app but never over other programs; no more flicker over foreign
+windows): title bar, cover/video, hide/expand buttons, resize grip.
+Draggable anywhere (even outside the window), follows the main window.
+Show/hide/center/FPS from Customize > Video. Cover loads immediately
+(hqdefault); ffmpeg pipe rawvideo at panel size & configured FPS, synced
+to audio: starts at -ss = audio position; loops when the video is shorter
+than the song; drift correction vs. player.get_position() (skips frames if
+>1.5 s behind, waits if ahead); seek relays with -ss; watchdog relays if
+8 s without frames. Position/size saved on close.
+
+Stickers: floating Toplevels (transient, no topmost), follow the main
+window, can be outside it; drag to move, right-click to delete; GIF stickers
+animated on the UI thread; positions saved on close.
+
+Video + stickers stacking: principal < video < stickers, re-affirmed only
+when the app is in the foreground (_our_window_is_foreground via
+GetForegroundWindow PID check on Windows), never on every tick.
+
+Customize window (🎨 Customize, Notebook tabs):
+- Fondo: mode (Color/Gradient/Image/Video — values stay internal),
+  Color 1/2, image file, video file, overlay opacity, Apply.
+- Botones: size 24-96, colors, border, shape (Round/Square/Custom PNG),
+  Load/Remove PNG shape, Use shapes.
+- Iconos: click any key to change (emoji/letter/image), icon font size.
+- Texto: 4 colors, list bg, active item, sizes, custom .ttf/.otf font
+  (registered privately on Windows via AddFontResourceEx), family.
+- Ventana: transparency, Always on top, Custom title bar (restart to
+  apply), Show thumbnails, Default volume (0.2 steps), Save volume on exit,
+  Hide console on startup (restart), Reset EVERYTHING.
+- Listas: background-relative transparency 0-0.9, progressive batch 20-300,
+  CUSTOM background per section (Search/Playlists/Liked/Queue:
+  Color.../Image.../Video.../Inherit), Show more.
+- Menu: per sidebar button background (Color.../Image.../Inherit).
+- Paneles: per panel background (Top bar/Sidebar/YT playlist list/Player/
+  Song progress/Volume).
+- Video: Show/hide panel, Center panel, FPS 1-30 (applies next song).
+- Stickers: Add floating image, Delete all stickers, sidebar order hint.
+- Themes: list / apply / save as / delete (see §5).
+
+9. CLOSE / PERSISTENCE
+----------------------
+on_close(): stops video/ffmpeg, saves window geometry, volume (if
+guardar_volumen), video panel dx/dy/w/h, stickers dx/dy/w/h, stops player,
+destroys root. Everything via config/theme.json.
+
+10. PERFORMANCE
+---------------
+- First batch 100 fast + render 80 rows: UI answers <2 s even with 2000
+  liked songs; rest arrives in background.
+- VIRTUALIZED LIST: the rows on screen are a WINDOW of the list, never the
+  whole list. current_list_full holds every song (that is the data, the
+  queue and the playback order), but only ~80 row widgets are alive at a
+  time (lote_progresivo). The recommendations are always painted, they are
+  few.
+- HARD CAP of live rows (MAX_LIVE_ROWS = 200): when "Show more" would paint
+  more than that, the window moves forward instead of building thousands
+  of widgets. A 10 000 song playlist therefore keeps ~160 rows alive,
+  loads in half a second and never freezes.
+- The rows are re-used (recycled) when the list pages: the widgets are
+  updated instead of being destroyed (destroying hundreds of Tk rows took
+  a whole second).
+- The background picture of a row (list transparency) only exists for the
+  rows on screen; the others are freed when they scroll out.
+- The thumbnail cache is capped too (_trim_thumb_cache, 900 images), so
+  scrolling a long list cannot fill the memory with pictures.
+- fetch_progressive stops when the list stops growing.
+- Autocheck only with real scroll (no eager preload).
+- Background resize debounce 600 ms + thread. Video panel fixed FPS.
+- Failures never hang: daemon threads, try/except everywhere, _call_ui is
+  the only UI-thread bridge (never touch Tk from threads).
+
+11. SELFTEST
+------------
+`python Iniciar.py --selftest` -> ALL OK (8 sections):
+Dependencies / Cookies / ThemeManager / YouTubeClient + search / Stream URL
++ ffmpeg pipe / PlayerEngine / OAuth+session+login / UI import.
+
+12. KNOWN ISSUES
+----------------
+- "Session expired": old cookies. Fix: refresh cookiesYT.json (auto-reloads),
+  use browser session, OAuth permanent, or direct Google login.
+- "Only removable from your own playlists": YT does not allow removing from
+  Liked/automatic playlists (missing setVideoId).
+- Stream without data / expired URL: auto-skip to next.
+- No audio device: stream fails -> fallback download + pygame.
+- Window frame: on Windows the native caption is removed; a 1 px DWM border
+  remains and is tinted to the theme color (DWMWA_BORDER_COLOR/CAPTION_COLOR).
+  On old Windows it may stay white/transparent.
+- Video black: no video_url (restricted) -> cover is expected.
+- Stickers do not show over other apps (by design: transient of the app,
+  not topmost). Move them or bring the app to front.
+
+13. FOR THE NEXT AI / MAINTAINER
+--------------------------------
+- Respect ThemeManager._merge; new keys with defaults in DEFAULT_THEME, or
+  old UI crashes with KeyError (use .get with default).
+- NEVER touch Tk from threads: use _call_ui() + _pump_ui().
+- _progressive_token cancels obsolete loads; copy it at thread start and
+  check each batch + should_stop.
+- current_list vs current_list_full: play/queue ALWAYS full; render only
+  visible. Do not mix.
+- Save geometries/volume/stickers on release or close, not on every motion.
+- Video panel is a transient Toplevel (no topmost); stickers too. Never set
+  -topmost again (that caused flicker over other windows).
+- Console: relays to pythonw on first run if ocultar_consola; never print
+  blocking input() without try.
+- After editing ui_main.py: py_compile + --selftest + smoke UI test.
+
+14. RECENT CHANGES (2026-10-15)
+-------------------------------
+- Full English translation: UI strings, dialogs, messages, comments,
+  README, Iniciar.py/.pyw, PrerequisitesInstalation.bat. Internal schema
+  keys intentionally unchanged.
+- Themes system: themes/<name>/ packages with theme.json + assets/;
+  theme1 = snapshot of current look; DefaultTheme = minimalist dark;
+  Themes tab in Customize; first-run bootstrap in Iniciar.py.
+  Stickers belong to themes (saved per theme, restored on theme change).
+- Thumbnails square (cover, no distortion) + fixed px size + ▶ overlay;
+  cache by URL|size. Frame white-border bug fixed (tile bg + retile on
+  thumbnail arrival).
+- Progress bar click-to-seek + drag-to-seek.
+- Video: real loop + sync with audio (-ss start, drift correction, seek
+  relay, up to 12 segments).
+- Video/stickers: transient, no topmost, reorder only in foreground; no
+  flicker over other windows.
+- Native 1 px border tinted to theme color (no white line over ✕/▢/─).
+- Console hidden from the start (relay to pythonw before any heavy import);
+  logs to cache/stdout.log.
+- No local data: favorites are YT Music Liked; lists are YT Music playlists;
+  right-click menu holds every YT Music option; thumbnail is the play button.
+
+15. RECENT CHANGES (2026-10-16)
+------------------------------------
+- Video window: drag from the bar, resize from ANY border/corner (decided by
+  click position, no overlay widgets: the ⚙/⛭/– controls are never covered).
+  Hovering a border shows the directional cursor. Window size never touches
+  the stream: frames just re-stretch (instant, same song keeps playing).
+- Video resolution (⚙ menu: 144p–2160p 4K+custom, video_panel.res_w/res_h,
+  caps 3840x2160) switches live on the same song with no window resize:
+  instant "Switching…" status, last frame stays up, stream URL is cached per
+  song so only ffmpeg respawns at the new size. Source matches the request
+  (height closeness dominates, mp4 only tiebreaks: 1080 asks get 1080, never
+  mp4-720). HD ramp: instant start on the fast source, background upgrade
+  (merged android+tv_embedded+web+tv clients, 3 guest/session attempts) with
+  hot-switch at the same audio position + "upgraded to NNNNp" status,
+  re-tried every 90 s while below the request (bot-wall varies over time: HD
+  engages on its own when YouTube allows). Clients merged give full DASH
+  (up to 2160p/4K) when the wall drops. Proof on screen: big "1280x720"
+  OSD flash plus [WxH] in the video title. Verified by automated GUI test
+  (25/25, scoring 5/5 exact).
+- local-cache.json is THE per-song store: Settings > "Load local-cache.json..."
+  loads the {videoId: {track, artist, album}} map; a mapped song displays and
+  scrobbles those values immediately, any other song shows the raw song data
+  (the default). Settings > "Export local-cache.json..." writes a copy
+  anywhere. The ✏️ dialog writes into that same file (other entries/keys
+  untouched, blank field = back to the song default); Remove clears the entry.
+  If no map is loaded, the first song edit generates config/local-cache.json.
+  The map is polled by mtime, so external edits are picked up live. Verified by
+  GUI test (songmap load/win/save/remove/export roundtrip).
+- ✏️ button next to the ⚙ settings gear: edits THIS song's title/artist/album
+  for Last.fm (live preview, ★ marker when the song is mapped). Matches by
+  videoId, so it survives title/artist drift, YT changes and Last.fm
+  corrections (pure text anchors died on any metadata change — that was the
+  "edit not applied" bug).
+- Old per-song override rules that lived in a regex-edits json are migrated
+  ONCE (idempotent) into the song map on startup, so nothing previously edited
+  is lost.
+- Video FPS up to 60 (Customize > Video slider 1-60; worker + display tick
+  both honor it).
+- Last.fm integration (app/lastfm_client.py, no new dependencies): Settings >
+  Last.fm scrobbling... takes an API key + secret (create at
+  last.fm/api/account/create), Connect opens the browser for authorization,
+  session key stored in config/lastfm.json. Now-playing pings on track
+  change, standard-rule scrobbles (>30s and half the song or 4 min) from the
+  tick loop, offline queue (max 200) flushed on reconnect. Scrobbles use the
+  EDITED metadata (see below).
+- Title/Artist/Album regex edits (app/metadata_edits.py, beets-style
+  {search, replace} rules with $1..$9; null = ignore/keep) are no longer wired
+  to the UI: the metadata source is now "map entry or raw song". The engine
+  module is kept (and still covered by the selftest) for external tooling.
+  Right-click > "Correct from Last.fm" fetches autocorrected tags
+  (track.getInfo) and writes them into the list, queue and player bar.
+- Video fullscreen (⛭ on the video bar, or double-click the video, Esc exits):
+  frameless + topmost + EXACT monitor rect (Win32 monitor API, never split
+  between monitors; the -fullscreen attribute fought the manual geometry and
+  desynced the mode, so it is no longer used). Bar hides for 100% video with
+  a floating overlay (title + ⚙ Resolution + ⛭ Exit fullscreen) that NEVER
+  auto-hides: both modes always have controls. Placement is verified in code
+  (geometry re-applied until winfo_x/y match the monitor rect). Exit restores
+  the bar BEFORE the video label in pack order (plain re-pack gave it zero
+  space -> controls disappeared after fullscreen).
+- Edits are never lost on save: the song map keeps unknown/extra keys of every
+  entry verbatim (a lossy save once wiped hand-written data), and loading
+  rejects nothing silently — a file that is not a {videoId: {...}} map simply
+  reports "That file is not a {videoId: {...}} map." and leaves the current
+  store untouched.
+- Theme inversion fixed: video bar/buttons repaint from the ACTIVE theme
+  (botones colors), so DefaultTheme shows no purple; DefaultTheme neutralized
+  to pure blacks/grays (progress #1a1a1a, section buttons #2a2a2a, accent
+  #ffffff, video pos 620/120). Song name/times/thumb now follow the player
+  panel custom color instead of keeping stale tints.
+- Playlist views: the Playlists section has a themed List/Grid/Custom toggle
+  (📋 List -> 🖼 Grid square tiles -> 🔷 Custom tiles using the theme button
+  PNG shape). View persists in theme (lista.vista_playlists), works with
+  progressive loading + Show more, hides while viewing tracks inside a
+  playlist.
+- Theme switch is now atomic: background re-renders synchronously before any
+  widget repaints (no more old-bands/new-colors "inverted" mix), async bg
+  finishes repaint panels + video bar + playlist toggle + volume label, and
+  the video border uses the active theme color (no purple leak in Default).
+- Video window resizes from all 4 corners and 4 edges (frameless handles
+  with directional cursors); fullscreen detaches transient properly, binds
+  Esc on window and children, and _toggle_video_panel exits fullscreen first.
+- Grid is responsive: columns and tile size are computed from the window
+  width and re-laid out on resize (debounced), so small windows get more rows
+  instead of eaten tiles. Playlist covers load in every path (progressive
+  batches now keep YT thumbnails) and local custom covers are supported.
+- Playlist right-click menu: Open, Play all, Playlist radio, Rename (YT),
+  Set/Remove display cover (local override in config/playlist_covers.json —
+  YT Music has no cover-upload API), Copy URL, Delete (YT). Bound on list
+  rows and on grid/custom tiles (right-click and double-click).
+
+16. PREVIOUS CHANGES (2026-10-15 LATE)
+------------------------------------
+- Themes fixed: DefaultTheme = dark colors (#0f0f0f / #171717 bg,
+  #252525 buttons, #181818 list, #d0d0d0 text) with NO stickers;
+  theme1 = user's current look (rosé/pink colors, custom PNG buttons,
+  image backgrounds, 3 stickers). config/theme.json restored as copy of
+  theme1. Each theme keeps its own stickers, colors, images, positions -
+  switching themes loads that theme's own config completely.
+- Video resolution selector: gear icon (⚙) on the VIDEO PANEL bar (not in
+  Settings). Opens menu with YouTube standard resolutions: 144p, 240p,
+  360p, 480p, 720p, 1080p, plus Custom size. Applies immediately and
+  reloads current video at new size.
+- Video fullscreen (⛭ button on video panel bar): enters TRUE fullscreen
+  like YouTube (overrideredirect, topmost, covers ENTIRE screen). Hides
+  stickers. Exit with Esc or click ⛭ again.
+- Maximize/restore main window: video panel repositions correctly;
+  stickers hidden when maximized, shown when restored.
+- Window title shows playlist name + position when playing from playlist:
+  "OpenYTPlayer — Playlist: Name (3/15)".
+- New sidebar sections: 🏠 Home (shows your YT Music Liked songs) and
+  🔎 Explore (type searches to discover music).
+- Playlist view toggle (📋/🖼): List view (default) and Grid view with
+  square tiles showing playlist thumbnails.
+- Volume number visible in dark themes: uses texto.color_lista for text.
+- All caches cleared on theme change (buttons, icons, shapes, section
+  backgrounds, panels) so no colors leak between themes.
+
+- RECENT CHANGES (2026-10-20) — Fixes & improvements requested by the user:
+
+  * Stream extraction hardened (youtube_client.get_stream_info): now tries
+    four paths (no-cookies bestaudio, with-cookies bestaudio, no-cookies
+    best, with-cookies best) before giving up, so age-restricted,
+    region-blocked or bot-walled videos (e.g. "Juan José" by Nico Miseria)
+    still yield an audio URL when any path works. New get_stream_info_safe()
+    returns ({}, error) instead of raising. PlayerEngine auto-skips failed
+    tracks to the next one instead of getting stuck.
+
+  * Progressive loading no longer rebuilds/reloads already-painted rows:
+    _search_partial, _set_full_list and render_list use incremental
+    rendering by videoId identity (_row_key / _append_only). When a new
+    batch arrives, only rows not yet on screen are painted. Old batches
+    are never destroyed and re-fetched, so thumbnails don't restart and
+    the list stops blinking/reloading while songs continue loading.
+
+  * Home section: now shows taste-based recommendations (your Liked songs
+    + related tracks from each liked song), NOT generic global tops.
+      Guest / no liked songs: soft "new music" discovery search.
+
+  * Explore section: now shows taste-based discoveries (Liked songs +
+    related songs + artist top tracks), NOT generic trending tops.
+      Guest / no liked songs: soft "discover music" search.
+
+  * Responsive player bar: controls (volume −/+, skip prev/next, pause,
+    shuffle, loop, fav) are packed FIRST on the right and NEVER disappear.
+      The progress bar shrinks to fit when the window is narrow.
+      New theme keys: reproductor.barra_responsive,
+      reproductor.barra_altura_minima, reproductor.botones_primero.
+      Controlled from Customize > Lists > "PLAYER BAR (responsive)".
+
+  * Playlist / album continuation (loop OFF): when a playlist OR an album is
+    open and there is NO loop (neither playlist loop nor single-song loop),
+    a separator bar appears below the playlist/album songs and, underneath,
+    recommended songs from that list. Recommendations ARE added to the
+    session list (current_list_full + player.queue) so they play one after
+    another when the playlist ends, but they are NOT saved to any
+    playlist/album and NOT written to disk: it is only the list of the
+    moment.
+
+    Continuation behavior:
+    - When the last song of the playlist finishes with loop completely OFF,
+      playback continues with the first recommended song, then the second,
+      the third, etc., in the exact visual order below the separator.
+    - The recommended song that starts playing moves ABOVE the separator,
+      so played recommendations accumulate above it and the unplayed ones
+      stay below. current_list_full / player.queue are synced to match the
+      visual order, so playback continues with the following recommendation.
+    - ALL songs (playlist songs and recommendations alike) can be dragged
+      from any position to any position, even crossing the separator.
+      Example: playlist 1-5 + recommendations 6-7-8-9. Drag song 8 to
+      position 2 -> order becomes 1, 8, 2, 3, 4, 5, 6, 7, 9. Drag song 3
+      below the separator -> it becomes part of the recommendation block.
+      Dragging rebuilds the playback order to match the visual order, but
+      never modifies nor saves any playlist.
+    - Single click on a song (title, thumbnail, duration or row background)
+      plays it immediately and loads the whole visible list into the queue.
+      Single click on a channel name opens that channel directly (each
+      artist of a multi-artist song has its own channel label). Dragging
+      (moving the mouse more than 4 px before releasing) reorders instead
+      of playing. There is no double-click requirement anywhere.
+    - Entering the queue after playing a playlist/album keeps exactly one
+      copy of the recommendations and the separator; they are never
+      appended twice. The queue section shows the same order that is being
+      played.
+    - New theme keys: lista.recomendaciones_continuacion,
+      lista.recomendaciones_cantidad (3-30). Controlled from Customize >
+      Lists > "PLAYLIST / ALBUM CONTINUATION (loop OFF)".
+
+  * Channel window crashes fixed: open_channel_window wrapped in try/except;
+    no longer forces -topmost (was stealing focus / breaking interaction);
+    avatar/title click plays the channel's FIRST real video (not the
+    channel ID which couldn't play); new _first_video_from_page() helper.
+
+  * New theme keys added to DEFAULT_THEME (auto-migrated on load via
+    ThemeManager._merge): fondos_secciones.inicio, fondos_secciones.explorar,
+    reproductor.barra_responsive, reproductor.barra_altura_minima,
+    reproductor.botones_primero, lista.recomendaciones_continuacion,
+    lista.recomendaciones_cantidad.
+
+  * Search now finds CHANNELS and ARTISTS too (youtube_client.search_channels
+    / search_artists via InnerTube search). Results appear at the end of the
+    search list, marked 📺 Canal / 👤 Artista. Clicking a channel/artist row
+    opens its channel window (tabs: Videos, Songs, Albums, Playlists) instead
+    of trying to play it. New _row_key / render paths handle channelId
+    alongside videoId.
+
+  * Channel window tabs fixed: Playlists and Albums tabs now load correctly.
+    get_channel_tab tries several tab-title matches (exact + contains) so
+    channels in other languages (e.g. "Listas de reproducción") still work.
+    _select re-loads a tab whenever the user clicks it (not only the first
+    time). _make_channel_tab_loader shows status messages inside the channel
+    window instead of only in the main window's status bar. Clicking a
+    playlist row opens it via open_playlist(); clicking an album row opens it
+    via _open_album_by_id().
+
+  * Continuation recommendations now work for BOTH playlists and albums (and
+    the queue): showing a playlist or album with loop OFF calls
+    _show_playlist_continuation(). cycle_loop() shows/hides it when toggling
+    loop mode. Leaving the section clears it. The separator text is generic
+    ("not added to the list") so it fits playlists and albums. Customize >
+    Lists labels this "PLAYLIST / ALBUM CONTINUATION (loop OFF)". Recommendations
+    are playable, move above the separator as they are played, every row is
+    draggable to any position, and nothing is saved to any playlist.
+
+  * Channel window title-bar buttons fixed: close/maximize/minimize were
+    inverted (close was where minimize should be). _make_win_btn no longer
+    packs internally; the three buttons are now packed in the correct order
+    (close first with side="right" -> far right, then max, then min -> far
+    left) for the standard Windows layout [min] [max] [close].
+
+  * Channel window title-bar buttons fixed: close/maximize/minimize were
+    inverted (close was where minimize should be). _make_win_btn no longer
+    packs internally; the three buttons are now packed in the correct order
+    (close first with side="right" -> far right, then max, then min -> far
+    left) for the standard Windows layout [min] [max] [close].
+
+  * Stream extraction hardened (youtube_client.get_stream_info): now tries
+    10 paths (5 format selectors × 2 cookie modes: bestaudio/best,
+    best[acodec!=none]/best, worst, m4a/bestaudio/best,
+    bestaudio[ext=m4a]/bestaudio/best, each with and without cookies). This
+    fixes songs that previously could not play at all, e.g. "Nico Miseria -
+    Juan José 💎 (Video Oficial)".
+
+  * PlayerEngine _load_and_play now falls back to download_audio when
+    get_stream_info fails OR when stream playback fails, before auto-skipping
+    to the next track. Songs that can't stream can still be downloaded and
+    played via pygame.
+
+  * Playlist/album continuation fixed: _show_playlist_continuation() is now
+    called AFTER render_list() / _append_only() so the separator + recommended
+    rows are not destroyed by a full re-render. Continuation works regardless
+    of current_section (a playlist or album opened from search/URL still shows
+    recommendations). State is reset only when opening a new playlist/album
+    or when loop is turned ON; entering the queue PRESERVES the current
+    recommendations and separator (no duplicates). Loop OFF shows a separator
+    bar with recommended songs below — playable, the played one moves above
+    the separator, every row is draggable anywhere, and they are added to the
+    session queue but never saved to YouTube.
+    _sync_list_from_rows() keeps current_list_full / player.queue in sync
+    with the visual row order after every drag/drop or promotion, and keeps
+    unrendered ("Show more") tracks instead of losing them.
+
+  * Click / drag / channel fixes:
+    - _build_one_row() used undefined variables (start_i + k) when storing
+      the drag data. The exception was swallowed, so rows were painted but
+      never became draggable: single click did nothing and only the old
+      double-click bindings worked. It now stores index=i + the track object
+      immediately after the song-row checks, before any decoration that can
+      fail. Double-click bindings were removed from song titles/thumbnails.
+    - Click and drag are captured from the root window and resolved through
+      event.widget (winfo_containing returned None on Windows). Single click
+      plays or opens the clicked channel; a movement >4 px becomes a drag.
+    - Drag computes the real drop slot from the pointer position over the
+      listframe, repacks the dragged row live (crossing the separator), and
+      only then calls _sync_list_from_rows().
+    - Multi-artist rows create one channel label per artist with its own
+      channelId; clicking it opens that channel directly (falls back to the
+      uploader lookup when a channelId is missing).
+
+  * Playback x2 / freezes fixed: rapid skips no longer join the previous load
+    thread on the UI thread (that blocked the interface). Every play_at()
+    increments a generation number; only the newest generation may start
+    audio, older loaders exit before opening a stream, and the new loader
+    waits for the previous one in its own background thread. The result is
+    one stream at a time even after dozens of rapid skips.
+
+17. RECENT CHANGES (2026-10-20) — FINAL BEHAVIOUR
+-------------------------------------------------
+  * Click / drag / channel fixes (the big one):
+    - _build_one_row() used undefined variables (start_i + k) when storing
+      the drag data. The exception was swallowed, so rows were painted but
+      never became draggable: single click did nothing and only the old
+      double-click bindings worked. It now stores index=i + the track object
+      immediately after the song-row checks, before any decoration that can
+      fail. Double-click bindings were removed from song titles/thumbnails.
+    - Click and drag are captured from the root window and resolved through
+      event.widget (winfo_containing returned None on Windows). Single click
+      plays or opens the clicked channel; a movement >4 px becomes a drag.
+    - Drag computes the real drop slot from the pointer position over the
+      listframe, repacks the dragged row live (crossing the separator), and
+      only then calls _sync_list_from_rows().
+    - Multi-artist rows create one channel label per artist with its own
+      channelId; clicking it opens that channel directly (falls back to the
+      uploader lookup when a channelId is missing).
+    - txt._show_chan was an undefined variable hidden by a try/except: the
+      title label never got its _vid, so the play count and the background
+      channel update never reached the rows. The channel is painted as its
+      own clickable label, so the title keeps only the song name.
+
+  * Queue / recommendations:
+    - play_track() now navigates with _enter_queue_view(), which keeps the
+      rows already painted instead of wiping and rebuilding the list (that
+      reset the continuation and appended a second copy of the
+      recommendations). The queue shows exactly what is playing.
+    - show_section("cola") preserves the recommendations and the separator
+      when the queue already carries them, and only fetches new ones when
+      it does not.
+    - The separator is painted by _ensure_separator_row() after every
+      render, and _rebuild_rows_from_full_list() rebuilds it in the right
+      place, so it survives any navigation.
+    - Recommendation replies carry a token: a late answer from a previous
+      playlist/album can never be appended to the list on screen.
+    - _clear_playlist_continuation() also removes the recommendation tracks
+      from the session list and from the queue (turning loop ON), and the
+      recommendations are never added twice when the queue ends.
+    - _sync_list_from_rows() uses the track object stored on each row
+      (duplicates and unrendered "Show more" tracks included) instead of
+      looking the song up by videoId.
+
+  * Playback x2 / freezes fixed: rapid skips no longer join the previous load
+    thread on the UI thread (that blocked the interface). Every play_at()
+    increments a generation number; only the newest generation may start
+    audio, older loaders exit before opening a stream, and the new loader
+    waits for the previous one in its own background thread. The result is
+    one stream at a time even after dozens of rapid skips.
+
+  * Very long lists no longer crash the app (10 000 songs tested):
+    - The list is VIRTUALIZED. current_list_full keeps every song (that is
+      the data and the playback order) but only a WINDOW of rows is ever
+      painted (~80 rows, "Show more" grows it). Before this fix the
+      recommendations forced a FULL render: a 3 000 song playlist built
+      3 001 Tk widgets, froze the UI for 5 s per render and, with the
+      thumbnails, killed the process. Now the same playlist paints 82
+      widgets in 0.1 s.
+    - _show_playlist_continuation(), _render_pl_continuation(),
+      show_section("cola"), _enter_queue_view(), _rebuild_rows_from_full_list()
+      and _sync_list_from_rows() all work on the window, never on the
+      whole list.
+    - HARD CAP (MAX_LIVE_ROWS = 400): when "Show more" would paint more
+      rows than that, the window moves forward instead of building
+      thousands of widgets.
+    - The songs that are not painted yet keep their place: the ones before
+      the window stay before it and the ones after it stay right after it,
+      still BEFORE the recommendations, so a long playlist still plays
+      completely before the recommendations.
+    - New playlist songs are painted BEFORE the recommendations separator,
+      so the order on screen is always the playback order.
+    - The thumbnail cache is capped (900 images): scrolling a long list
+      cannot fill the memory with pictures.
+    - Verified with a 10 000 song stress test: load 0.45 s / 80 rows,
+      "Show more" x40 keeps ~83 rows alive and no song is lost, the drag
+      still works, playing a song and opening the queue stay instant, and
+      the played recommendation still moves above the separator.
+
+  * The "Show more" button on long playlists (the last crash):
+    - The row background picture (the "tile" used when the list has
+      transparency) is only kept for the rows ON SCREEN. The others are
+      freed when they scroll out. One picture per row meant ~185 KB per
+      song: a long list with a background image ate hundreds of megabytes
+      and the app died.
+    - The re-sampling of the rows (retile) no longer calls
+      update_idletasks() once per row (it froze the interface for a
+      second on every "Show more").
+    - The rows are RE-USED: when the list pages, the widgets are updated
+      with the new songs instead of being destroyed and rebuilt.
+      Destroying 400 rows took 1.05 s; re-using them takes 0.05 s.
+    - "Show more" pages the window forward (the songs that are not on
+      screen keep their place in the data) and the list never keeps more
+      than MAX_LIVE_ROWS (200) rows alive. Every click takes 0.05-0.15 s.
+    - The drag and the separator now move ONLY the row that changes
+      instead of re-packing the whole list on every mouse move.
+    - The recommendations are painted through _append_rows(), so they are
+      not painted a second time (they used to appear twice).
+    - Measured with 3 000 and 10 000 songs, with a background image and
+      65 % list transparency: every click 0.05-0.15 s, 160 rows alive,
+      11 pictures in memory, and no song is ever lost.
+
+  * Neutral (boring on purpose) default palette:
+    - Every colour of the default theme (DEFAULT_THEME in app/config.py and
+      the shipped package themes/DefaultTheme) is now a pure neutral grey:
+      R = G = B, no hue and no saturation. The neon pink accent, the
+      purple panels and the violet hover colours are gone, and so are the
+      hardcoded fallbacks inside app/ui_main.py that used them.
+    - Every pictogram is now a monochrome text glyph instead of a colour
+      emoji (▶ ▌▌ ◀◀ ▶▶ ⇄ ↻ ↻1 ♡ ♥ ♪ ⌕ ⚙ ◐ ☰ ✕ and the sidebar/menu
+      labels), so not a single coloured emoji is left in the interface.
+      The gear uses the text presentation selector (U+FE0E) to stay grey.
+    - The drag highlight now follows the theme accent instead of a hardcoded
+      pink, so custom themes keep their own colour.
+    - Verified automatically on the live window: 456 colour values read from
+      the real widgets (main window, Customize, song editor) -> 0 with any
+      colour, and 0 colour glyphs in any label.
+
+  * Project hygiene for the public release (GitHub):
+    - The whole list panel was re-tested with real mouse events on the
+      real window: single click plays, single click on a channel opens that
+      channel, drag reorders, drag crosses the separator, the played
+      recommendation moves above the separator and the queue is never
+      duplicated.
+    - doc.txt, README.md and LICENSE updated; MIT license (© eUROmOUSE888),
+      the most open and permissive license in common use.
+    - All runtime data (logs, caches, theme, cookies, accounts, per-song
+      edits) is git-ignored and was removed from the working copy.
+
+FIN doc.txt — If you understand this, you understand OpenYTPlayer.

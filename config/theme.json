@@ -1,0 +1,241 @@
+{
+  "widgets": {
+    "buscador": {
+      "fondo": "#1e1e1e",
+      "texto": "#e8e8e8",
+      "borde": "#3d3d3d",
+      "cursor": "#e8e8e8",
+      "seleccion": "#4a4a4a"
+    },
+    "slider": {
+      "fondo": "#1e1e1e",
+      "pista": "#2b2b2b",
+      "pulgar": "#8c8c8c",
+      "borde": "#3d3d3d",
+      "texto": "#b4b4b4"
+    },
+    "panel": {
+      "fondo": "#1e1e1e",
+      "borde": "#383838",
+      "texto": "#e8e8e8"
+    },
+    "menu": {
+      "fondo": "#242424",
+      "texto": "#e8e8e8",
+      "activo_fondo": "#3d3d3d",
+      "activo_texto": "#f2f2f2",
+      "borde": "#383838"
+    }
+  },
+  "ventana": {
+    "titulo": "OpenYTPlayer",
+    "ancho": 1100,
+    "alto": 700,
+    "transparencia": 1.0,
+    "siempre_encima": false,
+    "tema_base": "oscuro",
+    "barra_personalizada": true,
+    "ocultar_consola": true
+  },
+  "fondo": {
+    "modo": "degradado",
+    "color": "#191919",
+    "color2": "#232323",
+    "degradado_direccion": "vertical",
+    "imagen_path": "",
+    "video_path": "",
+    "overlay_opacidad": 0.25
+  },
+  "botones": {
+    "tamano": 44,
+    "forma": "redondo",
+    "forma_custom_path": "",
+    "usar_formas": true,
+    "color_fondo": "#2b2b2b",
+    "color_hover": "#3a3a3a",
+    "color_texto": "#e0e0e0",
+    "borde_ancho": 0,
+    "borde_color": "#4a4a4a",
+    "esquina_radio": 22,
+    "espaciado": 6
+  },
+  "iconos": {
+    "play": "▶",
+    "pause": "▌▌",
+    "prev": "◀◀",
+    "next": "▶▶",
+    "shuffle": "⇄",
+    "shuffle_on": "⇄●",
+    "loop_off": "↻○",
+    "loop_all": "↻",
+    "loop_one": "↻1",
+    "fav": "♡",
+    "fav_on": "♥",
+    "volume": "♪",
+    "search": "⌕",
+    "settings": "⚙︎",
+    "customize": "◐",
+    "playlist": "☰",
+    "close": "✕",
+    "tamano_fuente_icono": 18
+  },
+  "texto": {
+    "fuente_familia": "Segoe UI",
+    "fuente_custom_path": "",
+    "fuente_tam_titulo": 13,
+    "fuente_tam_lista": 11,
+    "fuente_tam_pequena": 9,
+    "color_titulo": "#f0f0f0",
+    "color_subtitulo": "#9d9d9d",
+    "color_lista": "#cccccc",
+    "color_acento": "#b0b0b0"
+  },
+  "lista": {
+    "color_fondo": "#1a1a1a",
+    "color_item_hover": "#262626",
+    "color_item_activo": "#333333",
+    "altura_fila": 56,
+    "mostrar_thumbnails": true,
+    "tamano_thumbnail": 44,
+    "transparencia": 0.0,
+    "lote_progresivo": 80,
+    "recomendaciones_continuacion": true,
+    "recomendaciones_cantidad": 10
+  },
+  "fondos_secciones": {
+    "inicio": {
+      "modo": "heredar",
+      "color": "",
+      "color2": "",
+      "imagen_path": "",
+      "video_path": ""
+    },
+    "explorar": {
+      "modo": "heredar",
+      "color": "",
+      "color2": "",
+      "imagen_path": "",
+      "video_path": ""
+    },
+    "buscar": {
+      "modo": "heredar",
+      "color": "",
+      "color2": "",
+      "imagen_path": "",
+      "video_path": ""
+    },
+    "playlists": {
+      "modo": "heredar",
+      "color": "",
+      "color2": "",
+      "imagen_path": "",
+      "video_path": ""
+    },
+    "favoritas": {
+      "modo": "heredar",
+      "color": "",
+      "color2": "",
+      "imagen_path": "",
+      "video_path": ""
+    },
+    "cola": {
+      "modo": "heredar",
+      "color": "",
+      "color2": "",
+      "imagen_path": "",
+      "video_path": ""
+    }
+  },
+  "fondos_botones": {
+    "buscar": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "playlists": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "favoritas": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "cola": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    }
+  },
+  "fondos_paneles": {
+    "barra_superior": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "lateral": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "lateral_playlists": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "reproductor": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "progreso": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    },
+    "volumen": {
+      "modo": "heredar",
+      "color": "",
+      "imagen_path": ""
+    }
+  },
+  "video_panel": {
+    "visible": true,
+    "x": 620,
+    "y": 120,
+    "dx": 620,
+    "dy": 120,
+    "w": 320,
+    "h": 240,
+    "fps": 15,
+    "res_w": 640,
+    "res_h": 360
+  },
+  "sidebar_orden": [
+    "buscar",
+    "playlists",
+    "favoritas",
+    "cola"
+  ],
+  "stickers": [],
+  "reproductor": {
+    "volumen_defecto": 70.0,
+    "loop_defecto": "off",
+    "shuffle_defecto": false,
+    "autoplay": true,
+    "calidad_audio": "bestaudio",
+    "cache_max_mb": 500,
+    "notificaciones": true,
+    "guardar_volumen": true,
+    "barra_responsive": true,
+    "barra_altura_minima": 60,
+    "botones_primero": true
+  },
+  "cuenta": {
+    "cookies_json_path": "cookiesYT.json",
+    "usar_cookies": true,
+    "fuente_sesion": "archivo",
+    "navegador": "chrome"
+  }
+}
